@@ -1,15 +1,69 @@
-#!/usr/bin/expect --
+#! /usr/bin/env python
 
-exec sh -c "adb push busybox-armv6l /data/local/tmp/busybox"
-spawn adb shell
-expect "$" {
-    sleep 0.1
-    send "cd /data/local/tmp\n"
-    sleep 0.1
-    send "chmod +x busybox\n"
-    sleep 0.1
-    send "busybox --install -s /data/local/tmp/\n"
-    sleep 0.5
-    send "export PATH=/data/local/tmp/:\$PATH\n"
-}
-interact
+import subprocess
+import tempfile
+import urllib
+import sys
+
+def echo(msg):
+    sys.stdout.write(msg)
+    sys.stdout.flush()
+
+def call(cmd):
+    try:
+        return subprocess.check_output(cmd, shell=True)
+    except Exception as e:
+        return e.output
+
+def detect_busybox():
+    output = call('adb shell ls -al /data/local/tmp/busybox')
+    if not output:
+        return False
+    output = output.lower()
+    if "no such file" in output:
+        return False
+    permission = output.split()[0]
+    if permission.endswith('x'):
+        return True
+    else:
+        # no permission
+        permission_ret = call('adb shell chmod +x /data/local/tmp/busybox')
+        if not permission_ret:
+            return True
+        return False
+
+def install():
+    def report(count, size, total):
+        percent = int(count * size * 100 / total)
+        sys.stdout.write("\r %d%%" % percent + ' complete')
+        sys.stdout.flush()
+
+    binary = tempfile.NamedTemporaryFile()
+    echo("download busybox binary...\n")
+    urllib.urlretrieve('https://busybox.net/downloads/binaries/latest/busybox-armv6l', binary.name, reporthook=report)
+    out = call('adb push %s /data/local/tmp/busybox' % binary.name)
+    if "error" in out.lower():
+        raise Error('push busybox failed.')
+    out = call('adb shell chmod 777 /data/local/tmp/busybox')
+    echo('change permission : %s\n' % out)
+    out = call('adb shell /data/local/tmp/busybox --install -s /data/local/tmp/')
+    echo("install busybox : %s\n" % out)
+
+def interact():
+    try:
+        pexpect = __import__('pexpect')
+    except ImportError:
+        raise Exception('Please install the pexpect module first!! \nYou can do it by "pip install pexpect"')
+    shell = pexpect.spawn('adb shell')
+    shell.expect('$')
+    shell.sendline('export PATH=/data/local/tmp/:$PATH')
+    shell.interact()
+
+def main():
+    if not detect_busybox():
+        echo("install busybox...\n")
+        install()
+    interact()
+
+if __name__ == '__main__':
+    main()
