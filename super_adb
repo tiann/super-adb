@@ -1,0 +1,15 @@
+#!/usr/bin/expect --
+
+exec sh -c "adb push busybox-armv6l /data/local/tmp/busybox"
+spawn adb shell
+expect "$" {
+    sleep 0.1
+    send "cd /data/local/tmp\n"
+    sleep 0.1
+    send "chmod +x busybox\n"
+    sleep 0.1
+    send "busybox --install -s /data/local/tmp/\n"
+    sleep 0.5
+    send "export PATH=/data/local/tmp/:\$PATH\n"
+}
+interact
