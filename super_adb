@@ -57,6 +57,7 @@ def interact():
     shell = pexpect.spawn('adb shell')
     shell.expect('$')
     shell.sendline('export PATH=/data/local/tmp/:$PATH')
+    shell.sendline('clear')
     shell.interact()
 
 def main():
