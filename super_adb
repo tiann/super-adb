@@ -65,7 +65,7 @@ def install():
 
     binary = tempfile.NamedTemporaryFile()
     echo("download busybox binary...\n")
-    urllib.urlretrieve('https://busybox.net/downloads/binaries/latest/busybox-armv6l', binary.name, reporthook=report)
+    urllib.urlretrieve('https://github.com/tiann/super-adb/raw/master/busybox-armv6l', binary.name, reporthook=report)
     out = call('push %s /data/local/tmp/busybox' % binary.name)
     if "error" in out.lower():
         raise Error('push busybox failed.')
