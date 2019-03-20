@@ -19,7 +19,11 @@
 
 用 `super_adb`这个命令替代`adb shell`这个命令即可。
 
-`./super_adb run-as com.test.package` 使用run-as + 包名，可以直接进入对应包名的目录，并在对应包名下安装busybox
+默认打开 adb shell
+
+可加入 `run-as + 包名` 参数，可以直接进入对应包名的目录，并在对应包名下安装busybox
+
+`super_adb run-as com.test.package` 
 
 ## 效果图
 
