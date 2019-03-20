@@ -5,15 +5,28 @@ import tempfile
 import urllib
 import sys
 
+packageName = None
+packageDir = None
+
+
 def echo(msg):
     sys.stdout.write(msg)
     sys.stdout.flush()
 
+
 def call(cmd):
     try:
-        return subprocess.check_output('adb -s %s %s' % (call.device, cmd), shell=True)
+        return subprocess.check_output(
+            'adb -s %s %s %s' % (
+                call.device, "shell" if packageName is None else ("exec-out run-as " + packageName), cmd),
+            shell=True)
     except Exception as e:
         return e.output
+
+
+def get_tmp_path():
+    return '/data/local/tmp' if packageName is None else packageDir + "/tmp"
+
 
 def _get_devices():
     try:
@@ -23,6 +36,7 @@ def _get_devices():
     devices = devices.strip().split('\n')
     devices = devices[1:]
     return [line.split()[0] for line in devices]
+
 
 def select_device():
     devices = _get_devices()
@@ -39,9 +53,12 @@ def select_device():
         return devices[int(select)]
     else:
         return devices[0]
-            
+
+
 def detect_busybox():
-    output = call('shell ls -al /data/local/tmp/busybox')
+    tmp_path = get_tmp_path()
+
+    output = call('ls -al %s/busybox' % tmp_path)
     if not output:
         return False
     output = output.lower()
@@ -52,12 +69,15 @@ def detect_busybox():
         return True
     else:
         # no permission
-        permission_ret = call('shell chmod +x /data/local/tmp/busybox')
+        permission_ret = call('chmod +x %s/busybox' % tmp_path)
         if not permission_ret:
             return True
         return False
 
+
 def install():
+    tmp_path = get_tmp_path()
+
     def report(count, size, total):
         percent = int(count * size * 100 / total)
         sys.stdout.write("\r %d%%" % percent + ' complete')
@@ -66,13 +86,21 @@ def install():
     binary = tempfile.NamedTemporaryFile()
     echo("download busybox binary...\n")
     urllib.urlretrieve('https://github.com/tiann/super-adb/raw/master/busybox-armv6l', binary.name, reporthook=report)
-    out = call('push %s /data/local/tmp/busybox' % binary.name)
+    echo('install busybox...\n')
+    out = subprocess.check_output(
+        'adb -s %s push %s /data/local/tmp/busybox' % (
+            call.device, binary.name), shell=True)
+
+    call('mkdir tmp')
+    call('cp /data/local/tmp/busybox %s/busybox' % tmp_path)
+
     if "error" in out.lower():
         raise Error('push busybox failed.')
-    out = call('shell chmod 777 /data/local/tmp/busybox')
+    out = call('chmod 777 %s/busybox' % tmp_path)
     echo('change permission : %s\n' % out)
-    out = call('shell /data/local/tmp/busybox --install -s /data/local/tmp/')
+    out = call('%s/busybox --install -s %s/' % (tmp_path, tmp_path))
     echo("install busybox : %s\n" % out)
+
 
 def interact():
     try:
@@ -81,16 +109,30 @@ def interact():
         raise Exception('Please install the pexpect module first!! \nYou can do it by "pip install pexpect"')
     shell = pexpect.spawn('adb -s %s shell' % call.device)
     shell.expect('$')
-    shell.sendline('export PATH=/data/local/tmp/:$PATH')
+    if packageName is not None:
+        shell.sendline('run-as %s' % packageName)
+    shell.sendline('export PATH=%s/:$PATH' % get_tmp_path())
     shell.sendline('clear')
     shell.interact()
 
+
 def main():
     call.device = select_device()
+    global packageDir
+    packageDir = call('pwd').strip()
+
     if not detect_busybox():
         echo("install busybox...\n")
         install()
     interact()
 
+
 if __name__ == '__main__':
-    main()
+    if len(sys.argv) == 1:
+        main()
+    elif len(sys.argv) == 3 and sys.argv[1] == "run-as":
+        packageName = sys.argv[2]
+        print("run-as " + sys.argv[2])
+        main()
+    else:
+        print("usage:\n super_adb\n or\n super_adb run-as packageName")
